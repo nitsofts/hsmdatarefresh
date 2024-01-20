@@ -20,10 +20,14 @@ FILE_PATH = 'datarefresh.json'  # Path to the file in the repository
 BRANCH = 'main'  # Branch to update in the repository
 DATA_REFRESH_URL = 'https://nitsofts.github.io/hsmdatarefresh/datarefresh.json'  # URL to fetch current data
 
+
+
 # Convert milliseconds to a formatted time string
 def format_time(milliseconds):
     timestamp = datetime.fromtimestamp(milliseconds / 1000)
     return timestamp.strftime('%Y %b %d, %I:%M:%S %p')
+
+
 
 # Fetch current data from the GitHub Pages URL
 def fetch_current_data():
@@ -37,6 +41,8 @@ def fetch_current_data():
     except Exception as e:
         logging.error(f"Exception during fetch: {str(e)}")
         return None
+
+
 
 # Update the datarefresh.json file on GitHub
 def update_datarefresh_github(message, current_time_ms):
@@ -60,6 +66,7 @@ def update_datarefresh_github(message, current_time_ms):
         "lastRefreshInMs": current_time_ms,
         "lastRefreshInString": current_time_str,
         "lastRefreshMessage": message
+        "frequentRequest": frequent_request_count  # Add frequentRequest key here
     }])
     encoded_content = b64encode(content.encode()).decode()
 
@@ -78,28 +85,43 @@ def update_datarefresh_github(message, current_time_ms):
 
     return True, "File updated successfully"
 
+
+
 # Flask route to handle the update process
 @app.route('/datarefresh', methods=['GET'])
 def datarefresh():
-    # Fetch current data and determine if update is needed
     current_data = fetch_current_data()
     current_time_ms = int(round(time.time() * 1000))
 
-    # Check if an update is required based on time elapsed
     if current_data:
         last_refresh_in_ms = current_data[0].get("lastRefreshInMs", 0)
-        if current_time_ms - last_refresh_in_ms > 180000:  # 3 minutes
-            success, message = update_datarefresh_github('Update requested', current_time_ms)
-        else:
-            success, message = True, "Update not required - last refresh was less than 3 minutes ago"
-    else:
-        success, message = False, "Failed to fetch current data"
+        frequent_request_count = current_data[0].get("frequentRequest", 0)  # Get the current frequentRequest value
 
-    # Build response data
+        # Increment the frequentRequest counter if request is within 3 minutes of last refresh
+        if current_time_ms - last_refresh_in_ms < 180000:  # 3 minutes
+            frequent_request_count += 1
+            message = 'Frequent update detected'
+        else:
+            frequent_request_count = 0  # Reset the counter if the update is not frequent
+            message = 'Update requested'
+
+        # Attempt to update datarefresh.json
+        success, update_message = update_datarefresh_github(message, current_time_ms, frequent_request_count)
+
+        # Retain the current value of frequentRequest if update fails
+        if not success:
+            frequent_request_count = current_data[0].get("frequentRequest", 0)
+
+    else:
+        success, update_message = False, "Failed to fetch current data"
+        frequent_request_count = 0  # Reset to 0 if data couldn't be fetched
+
+    # Build response data including the frequentRequest value
     response_data = {
         "lastRefreshInMs": current_time_ms,
         "lastRefreshInString": format_time(current_time_ms),
-        "lastRefreshMessage": message
+        "lastRefreshMessage": update_message,
+        "frequentRequest": frequent_request_count
     }
     return response_data, 200 if success else 500
 
