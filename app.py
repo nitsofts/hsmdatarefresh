@@ -78,6 +78,7 @@ def update_github_file(message, current_time_ms):
 def update_file():
     current_data = fetch_current_data()
     current_time_ms = int(round(time.time() * 1000))
+    current_time_str = format_time(current_time_ms)
 
     if current_data:
         last_refresh_in_ms = current_data[0].get("lastRefreshInMs", 0)
@@ -90,6 +91,7 @@ def update_file():
 
     response_data = {
         "lastRefreshInMs": current_time_ms,
+        "lastRefreshInString": current_time_str,
         "lastRefreshMessage": message
     }
     return response_data, 200 if success else 500
