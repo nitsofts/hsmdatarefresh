@@ -31,19 +31,16 @@ def fetch_current_data():
         logging.error(f"Exception during fetch: {str(e)}")
         return None
 
+def format_time(milliseconds):
+    timestamp = datetime.fromtimestamp(milliseconds / 1000)
+    return timestamp.strftime('%Y %b %d, %I:%M %p')
+
 def update_github_file(message, current_time_ms):
     url = f'https://api.github.com/repos/{REPO_NAME}/contents/{FILE_PATH}'
     headers = {
         'Authorization': f'token {GITHUB_TOKEN}',
         'Accept': 'application/vnd.github.v3+json'
     }
-
-    # Prepare the content to be updated
-    content = json.dumps([{
-        "lastRefreshInMs": current_time_ms,
-        "lastRefreshMessage": message
-    }])
-    encoded_content = b64encode(content.encode()).decode()
 
     # Get the file's SHA
     get_response = requests.get(url, headers=headers)
@@ -53,6 +50,13 @@ def update_github_file(message, current_time_ms):
         return False, error_message
 
     sha = get_response.json().get('sha')
+
+    # Prepare the content to be updated
+    content = json.dumps([{
+        "lastRefreshInMs": current_time_ms,
+        "lastRefreshMessage": message
+    }])
+    encoded_content = b64encode(content.encode()).decode()
 
     # Update the file
     update_data = {
@@ -68,6 +72,7 @@ def update_github_file(message, current_time_ms):
         return False, error_message
 
     return True, "File updated successfully"
+
 
 @app.route('/update-file', methods=['GET'])
 def update_file():
