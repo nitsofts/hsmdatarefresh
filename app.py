@@ -1,15 +1,19 @@
 import logging
 from base64 import b64encode
 import requests
+from flask import Flask
 import os
 
 # Set up basic logging
 logging.basicConfig(level=logging.INFO)
 
-# Your existing setup...
-GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')  # Replace 'GITHUB_TOKEN' with your actual environment variable name
+# Flask app initialization
+app = Flask(__name__)
+
+# GitHub configuration
+GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')
 REPO_NAME = 'nitsofts/hsmdatarefresh'
-FILE_PATH = 'datarefresh.json'  # Update this if your file is in a subdirectory
+FILE_PATH = 'datarefresh.json'
 BRANCH = 'main'
 
 def update_github_file(message):
@@ -40,3 +44,13 @@ def update_github_file(message):
         return False
 
     return True
+
+@app.route('/update-file', methods=['GET'])
+def update_file():
+    if update_github_file('Hello World'):
+        return 'File updated successfully'
+    else:
+        return 'Failed to update the file', 500
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8080)
