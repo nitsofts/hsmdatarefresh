@@ -45,7 +45,7 @@ def fetch_current_data():
 
 
 # Update the datarefresh.json file on GitHub
-def update_datarefresh_github(message, current_time_ms):
+def update_datarefresh_github(message, current_time_ms, frequent_request_count):
     url = f'https://api.github.com/repos/{REPO_NAME}/contents/{FILE_PATH}'
     headers = {
         'Authorization': f'token {GITHUB_TOKEN}',
