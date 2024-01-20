@@ -83,23 +83,24 @@ def datarefresh():
         time_diff = current_time_ms - last_refresh_in_ms
 
         if time_diff > 180000:  # 3 minutes
-            # Attempt to reset frequentRequest count and update lastRefreshInMs
+            # Update lastRefreshInMs and reset frequentRequest count if successful
             message = "Data updated successfully"
             success = update_datarefresh_github(current_time_ms, 0, message)
             if success:
-                last_refresh_in_ms = current_time_ms
-                frequent_request_count = 0  # Reset count only on successful update
+                last_refresh_in_ms = current_time_ms  # Update only on successful push
+                frequent_request_count = 0
         else:
             # Increment frequentRequest count and do not update lastRefreshInMs
             frequent_request_count += 1
             message = "Frequent request detected"
-            update_datarefresh_github(last_refresh_in_ms, frequent_request_count, message)  # Update regardless of success
-            success = True  # For response purposes, treat as success to reflect updated frequentRequest count
+            update_datarefresh_github(last_refresh_in_ms, frequent_request_count, message)
+            success = True  # For response purposes, reflect that frequentRequest count was updated
 
     else:
         success = False
         frequent_request_count = 0
         message = "Failed to fetch current data"
+        last_refresh_in_ms = current_time_ms  # Set to current time if data fetch fails
 
     response_data = {
         "lastRefreshInMs": last_refresh_in_ms,
@@ -107,6 +108,7 @@ def datarefresh():
         "message": message
     }
     return response_data, 200 if success else 500
+
 
 
 
