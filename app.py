@@ -3,6 +3,8 @@ from base64 import b64encode
 import requests
 from flask import Flask
 import os
+import json
+import time
 
 # Set up basic logging
 logging.basicConfig(level=logging.INFO)
@@ -17,6 +19,7 @@ FILE_PATH = 'datarefresh.json'
 BRANCH = 'main'
 
 def update_github_file(message):
+    current_time_ms = int(round(time.time() * 1000))  # Current time in milliseconds
     url = f'https://api.github.com/repos/{REPO_NAME}/contents/{FILE_PATH}'
     headers = {
         'Authorization': f'token {GITHUB_TOKEN}',
@@ -26,31 +29,45 @@ def update_github_file(message):
     # Get the file's SHA
     get_response = requests.get(url, headers=headers)
     if get_response.status_code != 200:
-        logging.error(f"Error getting file SHA: {get_response.status_code}, {get_response.text}")
-        return False
+        error_message = f"Error getting file SHA: {get_response.status_code}, {get_response.text}"
+        logging.error(error_message)
+        return False, current_time_ms, error_message
 
     sha = get_response.json().get('sha')
+
+    # Prepare the content to be updated
+    content = json.dumps([{
+        "lastRefreshInMs": current_time_ms,
+        "lastRefreshMessage": message
+    }])
+    encoded_content = b64encode(content.encode()).decode()
 
     # Update the file
     update_data = {
         'message': 'Update datarefresh.json',
-        'content': b64encode(message.encode()).decode(),
+        'content': encoded_content,
         'branch': BRANCH,
         'sha': sha
     }
     put_response = requests.put(url, headers=headers, json=update_data)
     if put_response.status_code != 200:
-        logging.error(f"Error updating file: {put_response.status_code}, {put_response.text}")
-        return False
+        error_message = f"Error updating file: {put_response.status_code}, {put_response.text}"
+        logging.error(error_message)
+        return False, current_time_ms, error_message
 
-    return True
+    return True, current_time_ms, "File updated successfully"
 
 @app.route('/update-file', methods=['GET'])
 def update_file():
-    if update_github_file('Hello World'):
-        return 'File updated successfully'
+    success, current_time_ms, message = update_github_file('Update requested')
+    response_data = {
+        "lastRefreshInMs": current_time_ms,
+        "lastRefreshMessage": message
+    }
+    if success:
+        return response_data, 200
     else:
-        return 'Failed to update the file', 500
+        return response_data, 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
