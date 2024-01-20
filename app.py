@@ -20,15 +20,6 @@ FILE_PATH = 'datarefresh.json'  # Path to the file in the repository
 BRANCH = 'main'  # Branch to update in the repository
 DATA_REFRESH_URL = 'https://nitsofts.github.io/hsmdatarefresh/datarefresh.json'  # URL to fetch current data
 
-
-
-# Convert milliseconds to a formatted time string
-def format_time(milliseconds):
-    timestamp = datetime.fromtimestamp(milliseconds / 1000)
-    return timestamp.strftime('%Y %b %d, %I:%M:%S %p')
-
-
-
 # Fetch current data from the GitHub Pages URL
 def fetch_current_data():
     try:
@@ -42,10 +33,8 @@ def fetch_current_data():
         logging.error(f"Exception during fetch: {str(e)}")
         return None
 
-
-
 # Update the datarefresh.json file on GitHub
-def update_datarefresh_github(message, current_time_ms, frequent_request_count):
+def update_datarefresh_github(current_time_ms, frequent_request_count, message):
     url = f'https://api.github.com/repos/{REPO_NAME}/contents/{FILE_PATH}'
     headers = {
         'Authorization': f'token {GITHUB_TOKEN}',
@@ -61,12 +50,10 @@ def update_datarefresh_github(message, current_time_ms, frequent_request_count):
     sha = get_response.json().get('sha')
 
     # Prepare and encode the updated content
-    current_time_str = format_time(current_time_ms)
     content = json.dumps([{
         "lastRefreshInMs": current_time_ms,
-        "lastRefreshInString": current_time_str,
-        "lastRefreshMessage": message,
-        "frequentRequest": frequent_request_count  # Add frequentRequest key here
+        "frequentRequest": frequent_request_count,
+        "message": message  # Include the message key here
     }])
     encoded_content = b64encode(content.encode()).decode()
 
@@ -83,9 +70,7 @@ def update_datarefresh_github(message, current_time_ms, frequent_request_count):
         logging.error(error_message)
         return False, error_message
 
-    return True, "File updated successfully"
-
-
+    return True
 
 # Flask route to handle the update process
 @app.route('/datarefresh', methods=['GET'])
@@ -95,36 +80,27 @@ def datarefresh():
 
     if current_data:
         last_refresh_in_ms = current_data[0].get("lastRefreshInMs", 0)
-        frequent_request_count = current_data[0].get("frequentRequest", 0)  # Get the current frequentRequest value
+        frequent_request_count = current_data[0].get("frequentRequest", 0)
+        success = False
 
-        # Increment the frequentRequest counter if request is within 3 minutes of last refresh
-        if current_time_ms - last_refresh_in_ms < 180000:  # 3 minutes
-            frequent_request_count += 1
-            message = 'Frequent update detected'
+        if current_time_ms - last_refresh_in_ms > 180000:  # 3 minutes
+            message = "Data updated successfully"
+            success = update_datarefresh_github(current_time_ms, 0, message)
         else:
-            frequent_request_count = 0  # Reset the counter if the update is not frequent
-            message = 'Update requested'
-
-        # Attempt to update datarefresh.json
-        success, update_message = update_datarefresh_github(message, current_time_ms, frequent_request_count)
-
-        # Retain the current value of frequentRequest if update fails
-        if not success:
-            frequent_request_count = current_data[0].get("frequentRequest", 0)
+            frequent_request_count += 1
+            message = "Frequent request detected"
+            success = update_datarefresh_github(last_refresh_in_ms, frequent_request_count, message)
 
     else:
-        success, update_message = False, "Failed to fetch current data"
-        frequent_request_count = 0  # Reset to 0 if data couldn't be fetched
+        frequent_request_count = 0
+        message = "Failed to fetch current data"
 
-    # Build response data including the frequentRequest value
     response_data = {
-        "lastRefreshInMs": current_time_ms,
-        "lastRefreshInString": format_time(current_time_ms),
-        "lastRefreshMessage": update_message,
-        "frequentRequest": frequent_request_count
+        "lastRefreshInMs": current_time_ms if success else last_refresh_in_ms,
+        "frequentRequest": frequent_request_count if not success else 0,
+        "message": message
     }
     return response_data, 200 if success else 500
 
-# Run the Flask app
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
