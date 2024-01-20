@@ -1,7 +1,7 @@
 import logging
-from base64 import b64encode, b64decode
+from base64 import b64encode
 import requests
-from flask import Flask, request
+from flask import Flask
 import os
 import json
 import time
@@ -17,13 +17,18 @@ GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')
 REPO_NAME = 'nitsofts/hsmdatarefresh'
 FILE_PATH = 'datarefresh.json'
 BRANCH = 'main'
+DATA_REFRESH_URL = 'https://nitsofts.github.io/hsmdatarefresh/datarefresh.json'
 
-def get_current_file_content(url, headers):
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        content = b64decode(response.json()['content']).decode()
-        return json.loads(content)
-    else:
+def fetch_current_data():
+    try:
+        response = requests.get(DATA_REFRESH_URL)
+        if response.status_code == 200:
+            return json.loads(response.content)
+        else:
+            logging.error(f"Error fetching current data: {response.status_code}, {response.text}")
+            return None
+    except Exception as e:
+        logging.error(f"Exception during fetch: {str(e)}")
         return None
 
 def update_github_file(message, current_time_ms):
@@ -33,42 +38,51 @@ def update_github_file(message, current_time_ms):
         'Accept': 'application/vnd.github.v3+json'
     }
 
-    # Get current file content
-    current_content = get_current_file_content(url, headers)
-    if current_content:
-        last_refresh_time_ms = current_content[0]['lastRefreshInMs']
-        # Check if the last refresh was more than 3 minutes ago
-        if current_time_ms - last_refresh_time_ms > 180000:
-            content_to_update = json.dumps([{
-                "lastRefreshInMs": current_time_ms,
-                "lastRefreshMessage": message
-            }])
-            encoded_content = b64encode(content_to_update.encode()).decode()
-            sha = current_content[0]['sha']
+    # Prepare the content to be updated
+    content = json.dumps([{
+        "lastRefreshInMs": current_time_ms,
+        "lastRefreshMessage": message
+    }])
+    encoded_content = b64encode(content.encode()).decode()
 
-            # Update the file
-            update_data = {
-                'message': 'Update datarefresh.json',
-                'content': encoded_content,
-                'branch': BRANCH,
-                'sha': sha
-            }
-            put_response = requests.put(url, headers=headers, json=update_data)
-            if put_response.status_code != 200:
-                error_message = f"Error updating file: {put_response.status_code}, {put_response.text}"
-                logging.error(error_message)
-                return False, error_message
+    # Get the file's SHA
+    get_response = requests.get(url, headers=headers)
+    if get_response.status_code != 200:
+        error_message = f"Error getting file SHA: {get_response.status_code}, {get_response.text}"
+        logging.error(error_message)
+        return False, error_message
 
-            return True, "File updated successfully"
-        else:
-            return True, "Update not required - last refresh was less than 3 minutes ago"
-    else:
-        return False, "Error retrieving current file content"
+    sha = get_response.json().get('sha')
+
+    # Update the file
+    update_data = {
+        'message': 'Update datarefresh.json',
+        'content': encoded_content,
+        'branch': BRANCH,
+        'sha': sha
+    }
+    put_response = requests.put(url, headers=headers, json=update_data)
+    if put_response.status_code != 200:
+        error_message = f"Error updating file: {put_response.status_code}, {put_response.text}"
+        logging.error(error_message)
+        return False, error_message
+
+    return True, "File updated successfully"
 
 @app.route('/update-file', methods=['GET'])
 def update_file():
-    current_time_ms = int(round(time.time() * 1000))  # Current time in milliseconds
-    success, message = update_github_file('Update requested', current_time_ms)
+    current_data = fetch_current_data()
+    current_time_ms = int(round(time.time() * 1000))
+
+    if current_data:
+        last_refresh_in_ms = current_data[0].get("lastRefreshInMs", 0)
+        if current_time_ms - last_refresh_in_ms > 180000:  # 3 minutes
+            success, message = update_github_file('Update requested', current_time_ms)
+        else:
+            success, message = True, "Update not required - last refresh was less than 3 minutes ago"
+    else:
+        success, message = False, "Failed to fetch current data"
+
     response_data = {
         "lastRefreshInMs": current_time_ms,
         "lastRefreshMessage": message
