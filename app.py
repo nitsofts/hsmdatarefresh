@@ -65,7 +65,7 @@ def update_datarefresh_github(message, current_time_ms, frequent_request_count):
     content = json.dumps([{
         "lastRefreshInMs": current_time_ms,
         "lastRefreshInString": current_time_str,
-        "lastRefreshMessage": message
+        "lastRefreshMessage": message,
         "frequentRequest": frequent_request_count  # Add frequentRequest key here
     }])
     encoded_content = b64encode(content.encode()).decode()
