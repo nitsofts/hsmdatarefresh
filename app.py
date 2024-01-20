@@ -34,27 +34,22 @@ def fetch_current_data():
 
 def format_time(milliseconds):
     timestamp = datetime.fromtimestamp(milliseconds / 1000)
-    return timestamp.strftime('%Y %b %d, %I:%M %p')
+    return timestamp.strftime('%Y %b %d, %I:%M:%S %p')
+
 
 def update_github_file(message, current_time_ms):
+    current_time_str = format_time(current_time_ms)  # Get the formatted date string
+
     url = f'https://api.github.com/repos/{REPO_NAME}/contents/{FILE_PATH}'
     headers = {
         'Authorization': f'token {GITHUB_TOKEN}',
         'Accept': 'application/vnd.github.v3+json'
     }
 
-    # Get the file's SHA
-    get_response = requests.get(url, headers=headers)
-    if get_response.status_code != 200:
-        error_message = f"Error getting file SHA: {get_response.status_code}, {get_response.text}"
-        logging.error(error_message)
-        return False, error_message
-
-    sha = get_response.json().get('sha')
-
     # Prepare the content to be updated
     content = json.dumps([{
         "lastRefreshInMs": current_time_ms,
+        "lastRefreshInString": current_time_str,  # Include the formatted date string
         "lastRefreshMessage": message
     }])
     encoded_content = b64encode(content.encode()).decode()
