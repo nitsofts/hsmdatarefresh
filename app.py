@@ -72,7 +72,6 @@ def update_datarefresh_github(current_time_ms, frequent_request_count, message):
 
     return True
 
-# Flask route to handle the update process
 @app.route('/datarefresh', methods=['GET'])
 def datarefresh():
     current_data = fetch_current_data()
@@ -81,26 +80,35 @@ def datarefresh():
     if current_data:
         last_refresh_in_ms = current_data[0].get("lastRefreshInMs", 0)
         frequent_request_count = current_data[0].get("frequentRequest", 0)
-        success = False
+        time_diff = current_time_ms - last_refresh_in_ms
 
-        if current_time_ms - last_refresh_in_ms > 180000:  # 3 minutes
+        if time_diff > 180000:  # 3 minutes
+            # Attempt to reset frequentRequest count and update lastRefreshInMs
             message = "Data updated successfully"
             success = update_datarefresh_github(current_time_ms, 0, message)
+            if success:
+                last_refresh_in_ms = current_time_ms
+                frequent_request_count = 0  # Reset count only on successful update
         else:
+            # Increment frequentRequest count and do not update lastRefreshInMs
             frequent_request_count += 1
             message = "Frequent request detected"
-            success = update_datarefresh_github(last_refresh_in_ms, frequent_request_count, message)
+            update_datarefresh_github(last_refresh_in_ms, frequent_request_count, message)  # Update regardless of success
+            success = True  # For response purposes, treat as success to reflect updated frequentRequest count
 
     else:
+        success = False
         frequent_request_count = 0
         message = "Failed to fetch current data"
 
     response_data = {
-        "lastRefreshInMs": current_time_ms if success else last_refresh_in_ms,
-        "frequentRequest": frequent_request_count if not success else 0,
+        "lastRefreshInMs": last_refresh_in_ms,
+        "frequentRequest": frequent_request_count,
         "message": message
     }
     return response_data, 200 if success else 500
+
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
