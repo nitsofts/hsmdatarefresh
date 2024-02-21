@@ -1,1 +1,8 @@
-[{"lastRefreshInMs": 1708426563785, "frequentRequest": 0, "message": "Data updated successfully"}]
+[
+  {
+    "cdscData": 1708426563785, 
+    "prospectus": 1708426563785,
+    "topPerformers": 1708426563785,
+    "message": "Data updated successfully"
+  }
+]
